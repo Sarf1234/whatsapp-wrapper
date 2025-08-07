@@ -4,66 +4,95 @@ import qrcode from 'qrcode';
 
 let client = globalThis.client || null;
 let qrCodeImage = null;
+let clientStatus = 'initializing'; // Track current status
 
 if (!client) {
   client = new Client({ authStrategy: new LocalAuth() });
 
   client.on('qr', async (qr) => {
     qrCodeImage = await qrcode.toDataURL(qr);
+    clientStatus = 'qr';
     console.log('QR Generated');
   });
 
   client.on('ready', () => {
+    clientStatus = 'ready';
     console.log('WhatsApp ready ✅');
   });
 
   client.on('auth_failure', msg => {
+    clientStatus = 'auth_failure';
     console.error('Auth failure ⚠️:', msg);
   });
 
   client.on('disconnected', reason => {
+    clientStatus = 'disconnected';
     console.log('Client disconnected 🛑:', reason);
   });
 
   client.initialize();
-  globalThis.client = client;  // Save globally
+  globalThis.client = client;
 }
 
-// GET → Return QR Code or Status
+// ============================
+// @desc GET: Return QR code or connection status
+// ============================
 export async function GET() {
-  if (qrCodeImage) {
-    return NextResponse.json({ qr: qrCodeImage });
-  } else if (client && client.info && client.info.wid) {
-    return NextResponse.json({ qr: null, message: "Already Initialized" });
-  } else {
-    return NextResponse.json({ qr: null, message: "Waiting for QR..." });
+  switch (clientStatus) {
+    case 'qr':
+      return NextResponse.json({ qr: qrCodeImage, message: 'Scan the QR code' });
+    case 'ready':
+      return NextResponse.json({ qr: null, message: 'WhatsApp is connected ✅' });
+    case 'auth_failure':
+      return NextResponse.json({ qr: null, message: 'Authentication failed ❌' });
+    case 'disconnected':
+      return NextResponse.json({ qr: null, message: 'Client disconnected. Please restart.' });
+    default:
+      return NextResponse.json({ qr: null, message: 'Initializing...' });
   }
 }
 
-// POST → Send Messages
+// ============================
+// @desc POST: Send bulk messages
+// ============================
 export async function POST(req) {
   const { numbers, messages } = await req.json();
 
+  // Check if client is ready
   if (!client || !client.info || !client.info.wid) {
-    return NextResponse.json({ error: 'Client not ready' }, { status: 500 });
+    return NextResponse.json({ error: 'WhatsApp client not connected yet.' }, { status: 500 });
   }
 
-  numbers.forEach((num, idx) => {
-    // Sanitize number
-    let cleanNum = num.toString().replace(/[^0-9]/g, '');
+  // Validate inputs
+  if (!Array.isArray(numbers) || !Array.isArray(messages)) {
+    return NextResponse.json({ error: 'Invalid format: numbers & messages should be arrays.' }, { status: 400 });
+  }
 
-    // Add country code if needed (e.g., if number length is 10)
-    if (cleanNum.length === 10) {
-      cleanNum = '91' + cleanNum; // Default to India code
-    }
+  if (numbers.length !== messages.length) {
+    return NextResponse.json({ error: 'Mismatch: numbers and messages length must be same.' }, { status: 400 });
+  }
 
-    const chatId = cleanNum + '@c.us';
+  // Send messages with delay & error handling
+  const sendWithDelay = (chatId, message, delay) =>
+    new Promise((resolve) => {
+      setTimeout(async () => {
+        try {
+          await client.sendMessage(chatId, message);
+          resolve({ chatId, status: 'sent' });
+        } catch (err) {
+          resolve({ chatId, status: 'failed', error: err.message });
+        }
+      }, delay);
+    });
 
-    setTimeout(() => {
-      client.sendMessage(chatId, messages[idx]);
-    }, idx * 2000);
-  });
+  const results = await Promise.all(
+    numbers.map((num, idx) => {
+      let cleanNum = num.toString().replace(/[^0-9]/g, '');
+      if (cleanNum.length === 10) cleanNum = '91' + cleanNum;
+      const chatId = cleanNum + '@c.us';
+      return sendWithDelay(chatId, messages[idx], idx * 2500); // 2.5s delay
+    })
+  );
 
-  return NextResponse.json({ status: 'Messages Sent' });
+  return NextResponse.json({ status: 'completed', results });
 }
-
