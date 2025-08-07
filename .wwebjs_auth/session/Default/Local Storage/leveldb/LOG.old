@@ -1,7 +1,0 @@
-2025/08/07-16:44:44.284 774 Creating DB C:\Users\H P\Desktop\whatsapp-automation\whatsapp-sender\.wwebjs_auth\session\Default\Local Storage\leveldb since it was missing.
-2025/08/07-16:44:44.519 774 Reusing MANIFEST C:\Users\H P\Desktop\whatsapp-automation\whatsapp-sender\.wwebjs_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
-2025/08/07-16:44:44.725 774 Recovering log #3
-2025/08/07-16:44:44.726 774 Reusing old log C:\Users\H P\Desktop\whatsapp-automation\whatsapp-sender\.wwebjs_auth\session\Default\Local Storage\leveldb/000003.log 
-2025/08/07-16:49:48.919 dac Level-0 table #5: started
-2025/08/07-16:49:48.956 dac Level-0 table #5: 20544 bytes OK
-2025/08/07-16:49:48.993 dac Delete type=0 #3
